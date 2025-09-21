@@ -1,1 +1,0 @@
-2025-09-21 02:12:26 - [glm-4.5] Total Costs: 0.007900 input / 0.002185 output = 0.010084 total (47876 input tokens, 3310 output tokens, 8 requests, avg: 0.001261/request, 5984 input tokens/request, 414 output tokens/request, duration: 0:01:36, TPS: 74.5)

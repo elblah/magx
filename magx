@@ -1,0 +1,82 @@
+#!/bin/bash
+
+[ "${FLOCKER}" != "$0" ] && exec env FLOCKER="$0" flock -en "$0" "$0" "$@" || :
+
+# TODO fractional scale
+
+renice -n 19 $$ &> /dev/null
+
+INTERVAL=${INTERVAL:-1}
+SCALE=${SCALE:-2}
+
+ZOOM_FILE=$TMPDIR/magxzoom.jpg
+
+DEFAULT_IMG=$(cat <<EOF
+%jEwf01.:(nK-WX0rr9200961%jWJv00ro70S&A90S&A90%nSd1{t5i1oX#m1{Chq2NQ[B2NH!A3
+>A:N3L0KJ2[mEQ4I69Z5FboT5!+(?6aUS=5DxJC3Ku.k009935DI<H02bzl00000000000000000
+009%hj)K5ch+h0000000000000000095M00&Pa002j-rnW-e
+EOF
+)
+echo "$DEFAULT_IMG" | basenc --z85 -d > $ZOOM_FILE
+
+function cleanup() {
+    kill $FEH_PID &> /dev/null
+    rm "$ZOOM_FILE"
+}
+trap 'cleanup &' EXIT
+
+eval $(xwininfo -root | grep -A1 Width | sed 's/: /=/g' \
+        | tr '[:lower:]' '[:upper:]')
+if [ -z "$WIDTH" ] || [ -z "$HEIGHT" ]; then
+    echo "Error getting screen resolution."
+    exit 1
+fi
+SCREEN_WIDTH=$WIDTH
+SCREEN_HEIGHT=$HEIGHT
+
+if [ -z "$FEH_GEOMETRY" ]; then
+    FEH_GEOMETRY=800x160+0+920
+fi
+feh --scale-down --auto-zoom --borderless --image-bg black --cache-size=0  \
+    --title "MAGXZOOM" --ignore-aspect --stretch --zoom=fill \
+    --geometry=$FEH_GEOMETRY \
+    $ZOOM_FILE &
+FEH_PID=$!
+
+unset WIDTH
+unset HEIGHT
+while true; do
+    sleep $INTERVAL
+    if [ ! -d /proc/$FEH_PID ]; then
+        echo "Feh closed..."
+        exit
+    fi
+    eval $(xdotool search --name MAGXZOOM getwindowgeometry --shell)
+    if [ -z "$WIDTH" ]; then
+        echo "Waiting feh..."
+        continue
+    fi
+    FEH_WIDTH=$WIDTH
+    FEH_HEIGHT=$HEIGHT
+    eval $(xdotool getmouselocation --shell)
+    #echo $X $Y $WIDTH $HEIGHT
+
+    WIDTH=$(( $WIDTH / $SCALE ))
+    HEIGHT=$(( $HEIGHT / $SCALE ))
+
+    if [ -z "$NOCENTER" ]; then
+        X=$(( $X - ($WIDTH/2) )) 
+        Y=$(( $Y - ($HEIGHT/2) )) 
+
+        X=$(( $X<0 ? 0 : $X))
+        Y=$(( $Y<0 ? 0 : $Y))
+    fi
+
+    MAX_X=$(( $SCREEN_WIDTH - ( $FEH_WIDTH / $SCALE ) ))
+    MAX_Y=$(( $SCREEN_HEIGHT - ( $FEH_HEIGHT / $SCALE ) ))
+
+    X=$(echo $(( $X>$MAX_X ? $MAX_X : $X)))
+    Y=$(echo $(( $Y>$MAX_Y ? $MAX_Y : $Y)))
+
+    scrot -a ${X},${Y},${WIDTH},${HEIGHT} -z - > $ZOOM_FILE
+done
